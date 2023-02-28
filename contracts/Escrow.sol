@@ -27,7 +27,7 @@ contract Escrow is IEscrow, Roles, Blacklist {
     }
 
     // count of deals
-    uint256 count = 1;
+    uint256 public count = 1;
 
     // id => deal
     mapping(uint256 => Deal) deals;
