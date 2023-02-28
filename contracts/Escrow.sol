@@ -7,15 +7,18 @@ import "./interfaces/IERC20.sol";
 import "./utils/Roles.sol";
 import "./utils/Blacklist.sol";
 
-
 contract Escrow is IEscrow, Roles, Blacklist {
     uint256 public currentCommission = 10;
-    // packedInfo256 = amount208, date32, commission8, status8
+
+    // deal type options
     enum Status {
         PENDING,
         OPEN,
         CLOSED
     }
+
+    // struct of deals
+    // packedInfo256 = amount208, date32, commission8, status8
     struct Deal {
         uint256 packedInfo;
         address creator;
@@ -23,15 +26,31 @@ contract Escrow is IEscrow, Roles, Blacklist {
         address token;
     }
 
+    // count of deals
     uint256 count = 1;
 
+    // id => deal
     mapping(uint256 => Deal) deals;
 
+    /**
+     * @dev Creates a new deal using custom token.
+     *
+     * Emits a {CreateDeal} event.
+     *
+     * Requirements:
+     *
+     * - `msg.sender` must have a balance of at least `amount`.
+     * - `performer` cannot be the zero address.
+     * - `creator` cannot be `performer`.
+     * - `token` cannot be the zero address.
+     * - Not available for blacklisted users.
+     *
+     */
     function createDeal(
         address performer,
         uint256 amount,
         address token
-    ) external isBlacklisted{
+    ) external isBlacklisted {
         require(amount > 0, "Amount must be > 0");
         require(performer != address(0), "Performer cannot be zero address");
         require(performer != msg.sender, "Performer cannot be creator");
@@ -56,7 +75,24 @@ contract Escrow is IEscrow, Roles, Blacklist {
         emit CreateDeal(count, msg.sender, performer, amount, token, date);
     }
 
-    function createDealNative(address performer) external isBlacklisted payable {
+    /**
+     * @dev Creates a new deal using ETH.
+     *
+     * Emits a {CreateDeal} event.
+     *
+     * Requirements:
+     *
+     * - `msg.sender` must have a balance of at least `msg.value`.
+     * - `performer` cannot be the zero address.
+     * - `creator` cannot be `performer`.
+     * - Not available for blacklisted users.
+     *
+     */
+    function createDealNative(address performer)
+        external
+        payable
+        isBlacklisted
+    {
         require(msg.value > 0, "Amount must be > 0");
         require(performer != address(0), "Performer cannot be zero address");
         require(performer != msg.sender, "Performer cannot be creator");
@@ -85,7 +121,18 @@ contract Escrow is IEscrow, Roles, Blacklist {
         );
     }
 
-    function confirmDeal(uint256 id) external {
+    /**
+     * @dev Confirms the deal.
+     *
+     * Emits a {ConfirmDeal} event.
+     *
+     * Requirements:
+     *
+     * - `msg.sender` must be performer in the deal.
+     * - Deal must be in PENDING status.
+     *
+     */
+    function confirmDeal(uint256 id) external isBlacklisted {
         (
             ,
             address performer,
@@ -107,6 +154,17 @@ contract Escrow is IEscrow, Roles, Blacklist {
         emit ConfirmDeal(id, dateConfirmed);
     }
 
+    /**
+     * @dev Completes the deal.
+     *
+     * Emits a {CompleteDeal} event.
+     *
+     * Requirements:
+     *
+     * - `msg.sender` must be creator in the deal.
+     * - Deal must be in OPEN status.
+     *
+     */
     function completeDeal(uint256 id) external {
         (
             address creator,
@@ -137,6 +195,17 @@ contract Escrow is IEscrow, Roles, Blacklist {
         emit CompleteDeal(id, dateCompleted);
     }
 
+    /**
+     * @dev Cancels the deal.
+     *
+     * Emits a {CancelDeal} event.
+     *
+     * Requirements:
+     *
+     * - `msg.sender` must be creator or performer in the deal.
+     * - Deal must be in PENDING status.
+     *
+     */
     function cancelDeal(uint256 id) external {
         (
             address creator,
@@ -168,6 +237,17 @@ contract Escrow is IEscrow, Roles, Blacklist {
         emit CancelDeal(id, dateCancel);
     }
 
+    /**
+     * @dev Closes the deal.
+     *
+     * Emits a {CloseDeal} event.
+     *
+     * Requirements:
+     *
+     * - `msg.sender` must be admin.
+     * - Deal must not be in CLOSED status.
+     *
+     */
     function closeDeal(uint256 id, bool _type) external onlyAdmin {
         (
             address creator,
@@ -205,6 +285,9 @@ contract Escrow is IEscrow, Roles, Blacklist {
         emit CloseDeal(id, dateClose, _type);
     }
 
+    /**
+     * @dev Returns deal data.
+     */
     function getDeal(uint256 id)
         external
         view
@@ -221,6 +304,9 @@ contract Escrow is IEscrow, Roles, Blacklist {
         return _getDeal(id);
     }
 
+    /**
+     * @dev Returns deal data.
+     */
     function _getDeal(uint256 id)
         private
         view
@@ -241,14 +327,9 @@ contract Escrow is IEscrow, Roles, Blacklist {
         (amount, date, commission, status) = getPackedInfo(deal.packedInfo);
     }
 
-    function getHash(address creator, uint256 nonce)
-        private
-        pure
-        returns (bytes32)
-    {
-        return keccak256(abi.encodePacked(creator, nonce));
-    }
-
+    /**
+     * @dev Returns packedinfo about the deal.
+     */
     function setPackedInfo(
         uint256 _amount,
         uint256 _date,
@@ -262,6 +343,9 @@ contract Escrow is IEscrow, Roles, Blacklist {
         return packed;
     }
 
+    /**
+     * @dev Returns unpackedinfo about the deal.
+     */
     function getPackedInfo(uint256 _info)
         private
         pure
@@ -278,6 +362,9 @@ contract Escrow is IEscrow, Roles, Blacklist {
         _status = uint256(uint8(_info >> 248));
     }
 
+    /**
+     * @dev Returns all deals id in which the user participates.
+     */
     function getUserDealsId(address user)
         external
         view
@@ -301,6 +388,16 @@ contract Escrow is IEscrow, Roles, Blacklist {
         return ids;
     }
 
+    /**
+     * @dev See {IERC20-transferFrom}.
+     *
+     * Requirements:
+     *
+     * - `from` and `to` cannot be the zero address.
+     * - `from` must have a balance of at least `amount`.
+     * - the caller must have allowance for ``from``'s tokens of at least
+     * `amount`.
+     */
     function transferToken(
         address token,
         address from,
@@ -310,19 +407,56 @@ contract Escrow is IEscrow, Roles, Blacklist {
         IERC20(token).transferFrom(from, to, amount);
     }
 
-    function changeCommission(uint newCommission) external onlyOwner {
-        require(newCommission > 0 && newCommission < 100, "Commission must be > 0 && < 100");
+    /**
+     * @dev Changes the commission.
+     *
+     * Requirements:
+     *
+     * - `commission` cannot be less than 0 and greater than 100.
+     *
+     */
+    function changeCommission(uint256 newCommission) external onlyOwner {
+        require(
+            newCommission > 0 && newCommission < 100,
+            "Commission must be > 0 && < 100"
+        );
         currentCommission = newCommission;
     }
 
-    function withdraw(address receiver, address token, uint amount) external onlyOwner {
+    /**
+     * @dev Withdraws funds from the contract.
+     *
+     * Requirements:
+     *
+     * - `amount` must be greater than 0.
+     * - `receiver` cannot be the zero address.
+     * - `token` cannot be the zero address.
+     *
+     */
+    function withdraw(
+        address receiver,
+        address token,
+        uint256 amount
+    ) external onlyOwner {
         require(amount > 0, "Amount must be > 0");
         require(receiver != address(0), "Receiver cannot be zero address");
         require(token != address(0), "Token cannot be zero address");
-        transferToken(token,address(this),receiver,amount);
+        transferToken(token, address(this), receiver, amount);
     }
 
-    function withdrawNative(address payable receiver, uint amount) external onlyOwner {
+    /**
+     * @dev Withdraws funds from the contract.
+     *
+     * Requirements:
+     *
+     * - `amount` must be greater than 0.
+     * - `receiver` cannot be the zero address.
+     *
+     */
+    function withdrawNative(address payable receiver, uint256 amount)
+        external
+        onlyOwner
+    {
         require(amount > 0, "Amount must be > 0");
         require(receiver != address(0), "Receiver cannot be zero address");
         receiver.transfer(amount);
