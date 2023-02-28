@@ -6,20 +6,34 @@ import "../interfaces/IBlacklist.sol";
 import "./Roles.sol";
 
 contract Blacklist is Roles, IBlacklist {
+    mapping(address => bool) internal blacklist;
 
-    mapping(address=>bool) internal blacklist;
-
-  modifier isBlacklisted() {
-    require(!blacklist[msg.sender], "Blacklisted");
-    _;
-  }
-
-    function setBlacklisted(address user, bool _isBlacklisted) external onlyAdmin{
-        blacklist[user] = _isBlacklisted;
+    /**
+     * @dev Throws if called by user that was blacklisted.
+     */
+    modifier isBlacklisted() {
+        require(!blacklist[msg.sender], "Blacklisted");
+        _;
     }
 
-    function getBlacklisted(address user) external view returns(bool){
+    /**
+     * @dev Adds or removes a user from the blacklist.
+     *
+     * Emits a {setBlacklist} event.
+     *
+     */
+    function setBlacklisted(address user, bool _isBlacklisted)
+        external
+        onlyAdmin
+    {
+        blacklist[user] = _isBlacklisted;
+        emit setBlacklist(user, _isBlacklisted, block.timestamp);
+    }
+
+    /**
+     * @dev Returns whether the user was blacklisted.
+     */
+    function getBlacklisted(address user) external view returns (bool) {
         return blacklist[user];
     }
-
 }
