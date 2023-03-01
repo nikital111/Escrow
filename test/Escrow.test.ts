@@ -100,6 +100,7 @@ describe("Escrow", function () {
       .timestamp;
 
     const newCount = await escrow.count();
+    const newId = await escrow.count();
 
     const newBalance = await token.balanceOf(owner.address);
     const newBalanceEscrow = await token.balanceOf(escrow.address);
@@ -122,7 +123,7 @@ describe("Escrow", function () {
     await expect(createTx)
       .to.emit(escrow, "CreateDeal")
       .withArgs(
-        id,
+        newId,
         owner.address,
         otherAccount.address,
         amount,
@@ -164,6 +165,7 @@ describe("Escrow", function () {
       .timestamp;
 
     const newCount = await escrow.count();
+    const newId = await escrow.count();
 
     const deal = await escrow.getDeal(newCount);
 
@@ -186,7 +188,7 @@ describe("Escrow", function () {
     await expect(createNativeTx)
       .to.emit(escrow, "CreateDeal")
       .withArgs(
-        id,
+        newId,
         owner.address,
         otherAccount.address,
         amount,
@@ -261,10 +263,15 @@ describe("Escrow", function () {
     const { escrow, token, owner, otherAccount, id } = await loadFixture(
       deployEscrowAndCreateTokenFixture
     );
+
     await escrow.connect(otherAccount).confirmDeal(id);
+
     await expect(
       escrow.connect(otherAccount).completeDeal(id)
     ).to.be.revertedWith("You are not creator");
+
+    const balanceEscrow = await token.balanceOf(escrow.address);
+    const balancePerformer = await token.balanceOf(otherAccount.address);
 
     const completeTx = await escrow.completeDeal(id);
 
@@ -273,7 +280,14 @@ describe("Escrow", function () {
 
     const deal = await escrow.getDeal(id);
 
+    const newBalanceEscrow = await token.balanceOf(escrow.address);
+    const newBalancePerformer = await token.balanceOf(otherAccount.address);
+
     expect(deal.status).to.eq(2);
+
+    // commission - 10%
+    expect(newBalanceEscrow).to.eq(balanceEscrow.sub(amount * 0.9));
+    expect(newBalancePerformer).to.eq(balancePerformer.add(amount * 0.9));
 
     await expect(completeTx).to.emit(escrow, "CompleteDeal").withArgs(id, time);
 
@@ -297,6 +311,12 @@ describe("Escrow", function () {
     const deal = await escrow.getDeal(id);
 
     expect(deal.status).to.eq(2);
+
+    // commission - 10%
+    await expect(() => completeTx).to.changeEtherBalances(
+      [escrow.address, otherAccount.address],
+      [`-${(amount * 0.9).toString()}`, (amount * 0.9).toString()]
+    );
 
     await expect(completeTx).to.emit(escrow, "CompleteDeal").withArgs(id, time);
 
@@ -347,9 +367,79 @@ describe("Escrow", function () {
     await expect(escrow.cancelDeal(id)).to.be.revertedWith("Not pending deal");
   });
 
-  it("close the deal using custom token", async function () {
+  it("close the deal using custom token on creator side", async function () {
     const { escrow, token, owner, otherAccount, thirdAcc, id } =
       await loadFixture(deployEscrowAndCreateTokenFixture);
+
+    await escrow.setAdmin(thirdAcc.address, true);
+
+    await expect(escrow.closeDeal(id, false)).to.be.revertedWith("Not Admin");
+
+    const balanceEscrow = await token.balanceOf(escrow.address);
+    const balanceOwner = await token.balanceOf(owner.address);
+
+    const closeTx = await escrow.connect(thirdAcc).closeDeal(id, false);
+
+    const time = (await ethers.provider.getBlock(closeTx.blockNumber))
+      .timestamp;
+
+    const deal = await escrow.getDeal(id);
+
+    const newBalanceEscrow = await token.balanceOf(escrow.address);
+    const newBalanceOwner = await token.balanceOf(owner.address);
+
+    expect(deal.status).to.eq(2);
+
+    // commission - 10%
+    expect(newBalanceEscrow).to.eq(balanceEscrow.sub(amount * 0.9));
+    expect(newBalanceOwner).to.eq(balanceOwner.add(amount * 0.9));
+
+    await expect(closeTx)
+      .to.emit(escrow, "CloseDeal")
+      .withArgs(id, time, false);
+
+    await expect(
+      escrow.connect(thirdAcc).closeDeal(id, false)
+    ).to.be.revertedWith("Deal is closed");
+  });
+
+  it("close the deal using custom token on performer side", async function () {
+    const { escrow, token, owner, otherAccount, thirdAcc, id } =
+      await loadFixture(deployEscrowAndCreateTokenFixture);
+
+    await escrow.setAdmin(thirdAcc.address, true);
+
+    await expect(escrow.closeDeal(id, true)).to.be.revertedWith("Not Admin");
+
+    const balanceEscrow = await token.balanceOf(escrow.address);
+    const balancePerformer = await token.balanceOf(otherAccount.address);
+
+    const closeTx = await escrow.connect(thirdAcc).closeDeal(id, true);
+
+    const time = (await ethers.provider.getBlock(closeTx.blockNumber))
+      .timestamp;
+
+    const deal = await escrow.getDeal(id);
+
+    const newBalanceEscrow = await token.balanceOf(escrow.address);
+    const newBalancePerformer = await token.balanceOf(otherAccount.address);
+
+    expect(deal.status).to.eq(2);
+
+    // commission - 10%
+    expect(newBalanceEscrow).to.eq(balanceEscrow.sub(amount * 0.9));
+    expect(newBalancePerformer).to.eq(balancePerformer.add(amount * 0.9));
+
+    await expect(closeTx).to.emit(escrow, "CloseDeal").withArgs(id, time, true);
+
+    await expect(
+      escrow.connect(thirdAcc).closeDeal(id, true)
+    ).to.be.revertedWith("Deal is closed");
+  });
+
+  it("close the deal using native on creator side", async function () {
+    const { escrow, token, owner, otherAccount, thirdAcc, id } =
+      await loadFixture(deployEscrowAndCreateEthFixture);
 
     await escrow.setAdmin(thirdAcc.address, true);
 
@@ -364,12 +454,48 @@ describe("Escrow", function () {
 
     expect(deal.status).to.eq(2);
 
+    // commission - 10%
+    await expect(() => closeTx).to.changeEtherBalances(
+      [escrow.address, owner.address],
+      [`-${(amount * 0.9).toString()}`, (amount * 0.9).toString()]
+    );
+
     await expect(closeTx)
       .to.emit(escrow, "CloseDeal")
       .withArgs(id, time, false);
 
     await expect(
       escrow.connect(thirdAcc).closeDeal(id, false)
+    ).to.be.revertedWith("Deal is closed");
+  });
+
+  it("close the deal using native on creator side", async function () {
+    const { escrow, token, owner, otherAccount, thirdAcc, id } =
+      await loadFixture(deployEscrowAndCreateEthFixture);
+
+    await escrow.setAdmin(thirdAcc.address, true);
+
+    await expect(escrow.closeDeal(id, true)).to.be.revertedWith("Not Admin");
+
+    const closeTx = await escrow.connect(thirdAcc).closeDeal(id, true);
+
+    const time = (await ethers.provider.getBlock(closeTx.blockNumber))
+      .timestamp;
+
+    const deal = await escrow.getDeal(id);
+
+    expect(deal.status).to.eq(2);
+
+    // commission - 10%
+    await expect(() => closeTx).to.changeEtherBalances(
+      [escrow.address, otherAccount.address],
+      [`-${(amount * 0.9).toString()}`, (amount * 0.9).toString()]
+    );
+
+    await expect(closeTx).to.emit(escrow, "CloseDeal").withArgs(id, time, true);
+
+    await expect(
+      escrow.connect(thirdAcc).closeDeal(id, true)
     ).to.be.revertedWith("Deal is closed");
   });
 });
