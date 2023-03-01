@@ -29,7 +29,7 @@ describe("Escrow", function () {
 
   async function deployEscrowAndCreateTokenFixture() {
     // Contracts are deployed using the first signer/account by default
-    const [owner, otherAccount] = await ethers.getSigners();
+    const [owner, otherAccount, thirdAcc] = await ethers.getSigners();
 
     const EscrowFactory = await ethers.getContractFactory("Escrow");
     const escrow: Escrow = await EscrowFactory.deploy();
@@ -45,12 +45,12 @@ describe("Escrow", function () {
 
     const count = await escrow.count();
 
-    return { escrow, token, owner, otherAccount, id: count };
+    return { escrow, token, owner, otherAccount, thirdAcc, id: count };
   }
 
   async function deployEscrowAndCreateEthFixture() {
     // Contracts are deployed using the first signer/account by default
-    const [owner, otherAccount] = await ethers.getSigners();
+    const [owner, otherAccount, thirdAcc] = await ethers.getSigners();
 
     const EscrowFactory = await ethers.getContractFactory("Escrow");
     const escrow: Escrow = await EscrowFactory.deploy();
@@ -66,7 +66,7 @@ describe("Escrow", function () {
 
     const count = await escrow.count();
 
-    return { escrow, token, owner, otherAccount, id: count };
+    return { escrow, token, owner, otherAccount, thirdAcc, id: count };
   }
 
   it("should be deployed", async function () {
@@ -87,6 +87,9 @@ describe("Escrow", function () {
     const commission = await escrow.currentCommission();
     const count = await escrow.count();
 
+    const balance = await token.balanceOf(owner.address);
+    const balanceEscrow = await token.balanceOf(escrow.address);
+
     const createTx = await escrow.createDeal(
       otherAccount.address,
       amount,
@@ -98,6 +101,9 @@ describe("Escrow", function () {
 
     const newCount = await escrow.count();
 
+    const newBalance = await token.balanceOf(owner.address);
+    const newBalanceEscrow = await token.balanceOf(escrow.address);
+
     const deal = await escrow.getDeal(newCount);
 
     expect(deal.creator).to.eq(owner.address);
@@ -107,11 +113,13 @@ describe("Escrow", function () {
     expect(deal.date).to.eq(time);
     expect(deal.commission).to.eq(commission);
     expect(deal.status).to.eq(0);
+    expect(newBalance).to.eq(balance.sub(amount));
+    expect(newBalanceEscrow).to.eq(balanceEscrow.add(amount));
 
     expect(count).to.eq(1);
     expect(newCount).to.eq(2);
 
-    expect(createTx)
+    await expect(createTx)
       .to.emit(escrow, "CreateDeal")
       .withArgs(
         id,
@@ -170,7 +178,12 @@ describe("Escrow", function () {
     expect(count).to.eq(1);
     expect(newCount).to.eq(2);
 
-    expect(createNativeTx)
+    await expect(() => createNativeTx).to.changeEtherBalances(
+      [owner.address, escrow.address],
+      [`-${amount.toString()}`, amount.toString()]
+    );
+
+    await expect(createNativeTx)
       .to.emit(escrow, "CreateDeal")
       .withArgs(
         id,
@@ -192,5 +205,171 @@ describe("Escrow", function () {
     await expect(
       escrow.createDealNative(owner.address, { value: amount })
     ).to.be.revertedWith("Performer cannot be creator");
+  });
+
+  it("confirm the deal using custom token", async function () {
+    const { escrow, token, owner, otherAccount, id } = await loadFixture(
+      deployEscrowAndCreateTokenFixture
+    );
+
+    await expect(escrow.confirmDeal(id)).to.be.revertedWith(
+      "You are not performer"
+    );
+
+    const confirmTx = await escrow.connect(otherAccount).confirmDeal(id);
+
+    const time = (await ethers.provider.getBlock(confirmTx.blockNumber))
+      .timestamp;
+
+    const deal = await escrow.getDeal(id);
+
+    expect(deal.status).to.eq(1);
+
+    await expect(confirmTx).to.emit(escrow, "ConfirmDeal").withArgs(id, time);
+
+    await expect(
+      escrow.connect(otherAccount).confirmDeal(id)
+    ).to.be.revertedWith("Not pending deal");
+  });
+
+  it("confirm the deal using native", async function () {
+    const { escrow, token, owner, otherAccount, id } = await loadFixture(
+      deployEscrowAndCreateEthFixture
+    );
+
+    await expect(escrow.confirmDeal(id)).to.be.revertedWith(
+      "You are not performer"
+    );
+
+    const confirmTx = await escrow.connect(otherAccount).confirmDeal(id);
+
+    const time = (await ethers.provider.getBlock(confirmTx.blockNumber))
+      .timestamp;
+
+    const deal = await escrow.getDeal(id);
+
+    expect(deal.status).to.eq(1);
+
+    await expect(confirmTx).to.emit(escrow, "ConfirmDeal").withArgs(id, time);
+
+    await expect(
+      escrow.connect(otherAccount).confirmDeal(id)
+    ).to.be.revertedWith("Not pending deal");
+  });
+
+  it("complete the deal using custom token", async function () {
+    const { escrow, token, owner, otherAccount, id } = await loadFixture(
+      deployEscrowAndCreateTokenFixture
+    );
+    await escrow.connect(otherAccount).confirmDeal(id);
+    await expect(
+      escrow.connect(otherAccount).completeDeal(id)
+    ).to.be.revertedWith("You are not creator");
+
+    const completeTx = await escrow.completeDeal(id);
+
+    const time = (await ethers.provider.getBlock(completeTx.blockNumber))
+      .timestamp;
+
+    const deal = await escrow.getDeal(id);
+
+    expect(deal.status).to.eq(2);
+
+    await expect(completeTx).to.emit(escrow, "CompleteDeal").withArgs(id, time);
+
+    await expect(escrow.completeDeal(id)).to.be.revertedWith("Not open deal");
+  });
+
+  it("complete the deal using native", async function () {
+    const { escrow, token, owner, otherAccount, id } = await loadFixture(
+      deployEscrowAndCreateEthFixture
+    );
+    await escrow.connect(otherAccount).confirmDeal(id);
+    await expect(
+      escrow.connect(otherAccount).completeDeal(id)
+    ).to.be.revertedWith("You are not creator");
+
+    const completeTx = await escrow.completeDeal(id);
+
+    const time = (await ethers.provider.getBlock(completeTx.blockNumber))
+      .timestamp;
+
+    const deal = await escrow.getDeal(id);
+
+    expect(deal.status).to.eq(2);
+
+    await expect(completeTx).to.emit(escrow, "CompleteDeal").withArgs(id, time);
+
+    await expect(escrow.completeDeal(id)).to.be.revertedWith("Not open deal");
+  });
+
+  it("cancel the deal using custom token", async function () {
+    const { escrow, token, owner, otherAccount, thirdAcc, id } =
+      await loadFixture(deployEscrowAndCreateTokenFixture);
+
+    await expect(escrow.connect(thirdAcc).cancelDeal(id)).to.be.revertedWith(
+      "You don't participate in this deal"
+    );
+
+    const cancelTx = await escrow.cancelDeal(id);
+
+    const time = (await ethers.provider.getBlock(cancelTx.blockNumber))
+      .timestamp;
+
+    const deal = await escrow.getDeal(id);
+
+    expect(deal.status).to.eq(2);
+
+    await expect(cancelTx).to.emit(escrow, "CancelDeal").withArgs(id, time);
+
+    await expect(escrow.cancelDeal(id)).to.be.revertedWith("Not pending deal");
+  });
+
+  it("cancel the deal using native", async function () {
+    const { escrow, token, owner, otherAccount, thirdAcc, id } =
+      await loadFixture(deployEscrowAndCreateEthFixture);
+
+    await expect(escrow.connect(thirdAcc).cancelDeal(id)).to.be.revertedWith(
+      "You don't participate in this deal"
+    );
+
+    const cancelTx = await escrow.cancelDeal(id);
+
+    const time = (await ethers.provider.getBlock(cancelTx.blockNumber))
+      .timestamp;
+
+    const deal = await escrow.getDeal(id);
+
+    expect(deal.status).to.eq(2);
+
+    await expect(cancelTx).to.emit(escrow, "CancelDeal").withArgs(id, time);
+
+    await expect(escrow.cancelDeal(id)).to.be.revertedWith("Not pending deal");
+  });
+
+  it("close the deal using custom token", async function () {
+    const { escrow, token, owner, otherAccount, thirdAcc, id } =
+      await loadFixture(deployEscrowAndCreateTokenFixture);
+
+    await escrow.setAdmin(thirdAcc.address, true);
+
+    await expect(escrow.closeDeal(id, false)).to.be.revertedWith("Not Admin");
+
+    const closeTx = await escrow.connect(thirdAcc).closeDeal(id, false);
+
+    const time = (await ethers.provider.getBlock(closeTx.blockNumber))
+      .timestamp;
+
+    const deal = await escrow.getDeal(id);
+
+    expect(deal.status).to.eq(2);
+
+    await expect(closeTx)
+      .to.emit(escrow, "CloseDeal")
+      .withArgs(id, time, false);
+
+    await expect(
+      escrow.connect(thirdAcc).closeDeal(id, false)
+    ).to.be.revertedWith("Deal is closed");
   });
 });
