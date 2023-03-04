@@ -498,6 +498,7 @@ describe("Escrow", function () {
       escrow.connect(thirdAcc).closeDeal(id, true)
     ).to.be.revertedWith("Deal is closed");
   });
+<<<<<<< HEAD
 
   it("withdraw custom token from contract", async function () {
     const { escrow, token, owner, otherAccount, thirdAcc, id } =
@@ -572,4 +573,6 @@ describe("Escrow", function () {
       .withArgs(owner.address, 15, address0, time);
 
   });
+=======
+>>>>>>> 3cbc25888f0bf224ecd0ab7e5116b50e59efae0b
 });

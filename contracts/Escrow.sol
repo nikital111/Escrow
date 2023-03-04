@@ -178,7 +178,11 @@ contract Escrow is IEscrow, Roles, Blacklist {
         require(msg.sender == creator, "You are not creator");
         require(status == uint256(Status.OPEN), "Not open deal");
 
+<<<<<<< HEAD
         uint256 _amount = amountWithCommission(amount, commission);
+=======
+        uint256 _amount = amount - ((amount * (commission * 100)) / 10000);
+>>>>>>> 3cbc25888f0bf224ecd0ab7e5116b50e59efae0b
 
         status = uint256(Status.CLOSED);
 
@@ -264,7 +268,11 @@ contract Escrow is IEscrow, Roles, Blacklist {
 
         deals[id].packedInfo = setPackedInfo(amount, date, commission, status);
 
+<<<<<<< HEAD
         uint256 _amount = amountWithCommission(amount, commission);
+=======
+        uint256 _amount = amount - ((amount * (commission * 100)) / 10000);
+>>>>>>> 3cbc25888f0bf224ecd0ab7e5116b50e59efae0b
 
         if (_type) {
             if (token == address(0)) {
@@ -424,6 +432,7 @@ contract Escrow is IEscrow, Roles, Blacklist {
     }
 
     /**
+<<<<<<< HEAD
      * @dev Returns amout including commissioning.
      */
     function amountWithCommission(uint256 _amount, uint256 _commission)
@@ -462,12 +471,17 @@ contract Escrow is IEscrow, Roles, Blacklist {
     }
 
     /**
+=======
+>>>>>>> 3cbc25888f0bf224ecd0ab7e5116b50e59efae0b
      * @dev Withdraws funds from the contract.
      *
      * Requirements:
      *
      * - `amount` must be greater than 0.
+<<<<<<< HEAD
      * - `amount` must be not greater than {amountCanWithdraw}.
+=======
+>>>>>>> 3cbc25888f0bf224ecd0ab7e5116b50e59efae0b
      * - `receiver` cannot be the zero address.
      * - `token` cannot be the zero address.
      *
@@ -478,6 +492,7 @@ contract Escrow is IEscrow, Roles, Blacklist {
         uint256 amount
     ) external onlyOwner {
         require(amount > 0, "Amount must be > 0");
+<<<<<<< HEAD
         require(
             amount <= amountCanWithdraw(token),
             "Amount greater than can be"
@@ -488,6 +503,11 @@ contract Escrow is IEscrow, Roles, Blacklist {
         transferToken(token, address(this), receiver, amount);
 
         emit Withdraw(receiver, amount, token, block.timestamp);
+=======
+        require(receiver != address(0), "Receiver cannot be zero address");
+        require(token != address(0), "Token cannot be zero address");
+        transferToken(token, address(this), receiver, amount);
+>>>>>>> 3cbc25888f0bf224ecd0ab7e5116b50e59efae0b
     }
 
     /**
@@ -496,7 +516,10 @@ contract Escrow is IEscrow, Roles, Blacklist {
      * Requirements:
      *
      * - `amount` must be greater than 0.
+<<<<<<< HEAD
      * - `amount` must be not greater than {amountCanWithdraw}.
+=======
+>>>>>>> 3cbc25888f0bf224ecd0ab7e5116b50e59efae0b
      * - `receiver` cannot be the zero address.
      *
      */
@@ -505,6 +528,7 @@ contract Escrow is IEscrow, Roles, Blacklist {
         onlyOwner
     {
         require(amount > 0, "Amount must be > 0");
+<<<<<<< HEAD
         require(
             amount <= amountCanWithdraw(address(0)),
             "Amount greater than can be"
@@ -513,5 +537,9 @@ contract Escrow is IEscrow, Roles, Blacklist {
         receiver.transfer(amount);
 
         emit Withdraw(receiver, amount, address(0), block.timestamp);
+=======
+        require(receiver != address(0), "Receiver cannot be zero address");
+        receiver.transfer(amount);
+>>>>>>> 3cbc25888f0bf224ecd0ab7e5116b50e59efae0b
     }
 }
