@@ -498,15 +498,20 @@ describe("Escrow", function () {
       escrow.connect(thirdAcc).closeDeal(id, true)
     ).to.be.revertedWith("Deal is closed");
   });
-<<<<<<< HEAD
 
   it("withdraw custom token from contract", async function () {
     const { escrow, token, owner, otherAccount, thirdAcc, id } =
       await loadFixture(deployEscrowAndCreateTokenFixture);
 
-    await expect(escrow.connect(otherAccount).withdraw(otherAccount.address, token.address, amount)).to.be.revertedWith("Not Owner");
+    await expect(
+      escrow
+        .connect(otherAccount)
+        .withdraw(otherAccount.address, token.address, amount)
+    ).to.be.revertedWith("Not Owner");
 
-    await expect(escrow.withdraw(otherAccount.address, token.address, amount)).to.be.revertedWith("Amount greater than can be");
+    await expect(
+      escrow.withdraw(otherAccount.address, token.address, amount)
+    ).to.be.revertedWith("Amount greater than can be");
 
     await escrow.connect(otherAccount).confirmDeal(id);
 
@@ -521,7 +526,11 @@ describe("Escrow", function () {
     const balanceEscrow = await token.balanceOf(escrow.address);
     const balanceReceiver = await token.balanceOf(otherAccount.address);
 
-    const withdrawTx = await escrow.withdraw(otherAccount.address, token.address, 15);
+    const withdrawTx = await escrow.withdraw(
+      otherAccount.address,
+      token.address,
+      15
+    );
 
     const time = (await ethers.provider.getBlock(withdrawTx.blockNumber))
       .timestamp;
@@ -536,16 +545,19 @@ describe("Escrow", function () {
     await expect(withdrawTx)
       .to.emit(escrow, "Withdraw")
       .withArgs(otherAccount.address, 15, token.address, time);
-
   });
 
   it("withdraw ETH from contract", async function () {
     const { escrow, token, owner, otherAccount, thirdAcc, id } =
       await loadFixture(deployEscrowAndCreateEthFixture);
 
-    await expect(escrow.connect(otherAccount).withdrawNative(otherAccount.address, amount)).to.be.revertedWith("Not Owner");
+    await expect(
+      escrow.connect(otherAccount).withdrawNative(otherAccount.address, amount)
+    ).to.be.revertedWith("Not Owner");
 
-    await expect(escrow.withdrawNative(otherAccount.address, amount)).to.be.revertedWith("Amount greater than can be");
+    await expect(
+      escrow.withdrawNative(otherAccount.address, amount)
+    ).to.be.revertedWith("Amount greater than can be");
 
     await escrow.connect(otherAccount).confirmDeal(id);
 
@@ -553,9 +565,9 @@ describe("Escrow", function () {
       escrow.withdrawNative(otherAccount.address, 0)
     ).to.be.revertedWith("Amount must be > 0");
 
-    await expect(
-      escrow.withdrawNative(address0, 15)
-    ).to.be.revertedWith("Receiver cannot be zero address");
+    await expect(escrow.withdrawNative(address0, 15)).to.be.revertedWith(
+      "Receiver cannot be zero address"
+    );
 
     const withdrawTx = await escrow.withdrawNative(owner.address, 15);
 
@@ -571,8 +583,5 @@ describe("Escrow", function () {
     await expect(withdrawTx)
       .to.emit(escrow, "Withdraw")
       .withArgs(owner.address, 15, address0, time);
-
   });
-=======
->>>>>>> 3cbc25888f0bf224ecd0ab7e5116b50e59efae0b
 });
