@@ -37,14 +37,11 @@ interface IEscrow {
      */
     event CloseDeal(uint256 indexed id, uint256 date, bool typeClose);
 
-<<<<<<< HEAD
     /**
      * @dev Emitted when withdrawing funds.
      */
     event Withdraw(address indexed receiver, uint amount, address token, uint date);
 
-=======
->>>>>>> 3cbc25888f0bf224ecd0ab7e5116b50e59efae0b
     // Functions
 
     /**
