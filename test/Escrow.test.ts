@@ -12,7 +12,7 @@ const amount = 150;
 describe("Escrow", function () {
   async function deployEscrowFixture() {
     // Contracts are deployed using the first signer/account by default
-    const [owner, otherAccount] = await ethers.getSigners();
+    const [owner, otherAccount, thirdAcc] = await ethers.getSigners();
 
     const EscrowFactory = await ethers.getContractFactory("Escrow");
     const escrow: Escrow = await EscrowFactory.deploy();
@@ -24,7 +24,7 @@ describe("Escrow", function () {
 
     await token.deployed();
 
-    return { escrow, token, owner, otherAccount };
+    return { escrow, token, owner, otherAccount, thirdAcc };
   }
 
   async function deployEscrowAndCreateTokenFixture() {
@@ -617,7 +617,7 @@ describe("Escrow", function () {
   });
 
   it("get ids by user", async function () {
-    const { escrow, token, owner, otherAccount } = await loadFixture(
+    const { escrow, token, owner, otherAccount, thirdAcc } = await loadFixture(
       deployEscrowFixture
     );
 
@@ -634,7 +634,113 @@ describe("Escrow", function () {
 
     expect(dealsOwner.length).to.eq(1);
     expect(dealsOther.length).to.eq(1);
+    expect(dealsOwner[0]).to.eq(2);
+    expect(dealsOther[0]).to.eq(2);
 
-    console.log(dealsOwner.length);
+    await escrow.connect(thirdAcc).createDealNative(owner.address, {
+      value: amount,
+    });
+
+    const dealsOwner2 = await escrow.getUserDealsId(owner.address);
+    const dealsOther2 = await escrow.getUserDealsId(otherAccount.address);
+    const dealsThird = await escrow.getUserDealsId(thirdAcc.address);
+
+    expect(dealsOwner2.length).to.eq(2);
+    expect(dealsOther2.length).to.eq(1);
+    expect(dealsThird.length).to.eq(1);
+    expect(dealsOwner2[0]).to.eq(2);
+    expect(dealsOwner2[1]).to.eq(3);
+    expect(dealsOther2[0]).to.eq(2);
+    expect(dealsThird[0]).to.eq(3);
+  });
+
+  it("roles", async function () {
+    const { escrow, token, owner, otherAccount, thirdAcc } = await loadFixture(
+      deployEscrowFixture
+    );
+
+    await expect(
+      escrow.connect(otherAccount).setAdmin(otherAccount.address, true)
+    ).to.be.revertedWith("Not Owner");
+
+    const adminTx = await escrow.setAdmin(otherAccount.address, true);
+
+    const isAdmin = await escrow.getAdmin(otherAccount.address);
+
+    const time = (await ethers.provider.getBlock(adminTx.blockNumber))
+      .timestamp;
+
+    await expect(adminTx)
+      .to.emit(escrow, "SetAdmin")
+      .withArgs(otherAccount.address, true, time);
+
+    expect(isAdmin).to.eq(true);
+
+    const adminTx2 = await escrow.setAdmin(otherAccount.address, false);
+
+    const isAdmin2 = await escrow.getAdmin(otherAccount.address);
+
+    const time2 = (await ethers.provider.getBlock(adminTx2.blockNumber))
+      .timestamp;
+
+    await expect(adminTx2)
+      .to.emit(escrow, "SetAdmin")
+      .withArgs(otherAccount.address, false, time2);
+
+    expect(isAdmin2).to.eq(false);
+
+    await expect(
+      escrow.connect(otherAccount).transferOwnership(otherAccount.address)
+    ).to.be.revertedWith("Not Owner");
+
+    const transferOwnerTx = await escrow.transferOwnership(
+      otherAccount.address
+    );
+
+    const isOwner = await escrow.owner();
+
+    await expect(transferOwnerTx)
+      .to.emit(escrow, "OwnershipTransferred")
+      .withArgs(owner.address, otherAccount.address);
+
+    expect(isOwner).to.eq(otherAccount.address);
+  });
+
+  it("blacklist", async function () {
+    const { escrow, token, owner, otherAccount, thirdAcc } = await loadFixture(
+      deployEscrowFixture
+    );
+
+    await expect(
+      escrow.setBlacklisted(otherAccount.address, true)
+    ).to.be.revertedWith("Not Admin");
+
+    await escrow.setAdmin(owner.address, true);
+
+    const blackTx = await escrow.setBlacklisted(otherAccount.address, true);
+
+    const isBlackListed = await escrow.getBlacklisted(otherAccount.address);
+
+    const time = (await ethers.provider.getBlock(blackTx.blockNumber))
+      .timestamp;
+
+    await expect(blackTx)
+      .to.emit(escrow, "setBlacklist")
+      .withArgs(otherAccount.address, true, time);
+
+    expect(isBlackListed).to.eq(true);
+
+    const blackTx2 = await escrow.setBlacklisted(otherAccount.address, false);
+
+    const isBlackListed2 = await escrow.getBlacklisted(otherAccount.address);
+
+    const time2 = (await ethers.provider.getBlock(blackTx2.blockNumber))
+      .timestamp;
+
+    await expect(blackTx2)
+      .to.emit(escrow, "setBlacklist")
+      .withArgs(otherAccount.address, false, time2);
+
+    expect(isBlackListed2).to.eq(false);
   });
 });
