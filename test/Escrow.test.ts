@@ -584,4 +584,57 @@ describe("Escrow", function () {
       .to.emit(escrow, "Withdraw")
       .withArgs(owner.address, 15, address0, time);
   });
+
+  it("commission", async function () {
+    const { escrow, token, owner, otherAccount } = await loadFixture(
+      deployEscrowFixture
+    );
+
+    const commission = await escrow.currentCommission();
+    const count = await escrow.count();
+
+    await escrow.createDealNative(otherAccount.address, {
+      value: amount,
+    });
+
+    await escrow.changeCommission(50);
+
+    const newId = await escrow.count();
+    const newCommission = await escrow.currentCommission();
+
+    const deal = await escrow.getDeal(newId);
+
+    expect(deal.commission).to.eq(commission);
+    expect(newCommission).to.eq(50);
+
+    await expect(escrow.changeCommission(0)).to.be.revertedWith(
+      "Commission must be > 0 && < 100"
+    );
+
+    await expect(escrow.changeCommission(100)).to.be.revertedWith(
+      "Commission must be > 0 && < 100"
+    );
+  });
+
+  it("get ids by user", async function () {
+    const { escrow, token, owner, otherAccount } = await loadFixture(
+      deployEscrowFixture
+    );
+
+    const count = await escrow.count();
+
+    await escrow.createDealNative(otherAccount.address, {
+      value: amount,
+    });
+
+    const newId = await escrow.count();
+
+    const dealsOwner = await escrow.getUserDealsId(owner.address);
+    const dealsOther = await escrow.getUserDealsId(otherAccount.address);
+
+    expect(dealsOwner.length).to.eq(1);
+    expect(dealsOther.length).to.eq(1);
+
+    console.log(dealsOwner.length);
+  });
 });
